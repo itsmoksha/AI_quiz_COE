@@ -1,4 +1,5 @@
 import json
+import uuid
 from ollama import chat
 from schemas.quiz_schemas import QuizResponse
 from vectorstore.dummy_chroma import get_chroma_collection, retrieve_chapter_context
@@ -21,7 +22,8 @@ def generate_placement_quiz(target_level: str = "beginner") -> QuizResponse:
     """
     prompt = f"""
 You are an expert cybersecurity examiner evaluating a student's placement level.
-Generate exactly 2 multiple-choice questions for a {target_level.upper()} diagnostic test.
+Generate exactly 20 multiple-choice questions for a {target_level.upper()} diagnostic test.
+Ensure the questions are highly diverse and cover different concepts each time. (Randomization Seed: {uuid.uuid4()})
 
 === REQUIREMENTS ===
 1. Quiz Type: placement
@@ -50,7 +52,7 @@ Generate exactly 2 multiple-choice questions for a {target_level.upper()} diagno
             {"role": "user", "content": prompt}
         ],
         format="json",
-        options={"temperature": 0.3}
+        options={"temperature": 0.8}
     )
 
     parsed = _clean_and_parse_json(response["message"]["content"])
@@ -73,7 +75,8 @@ def generate_chapter_quiz(chapter_title: str, difficulty: str = "beginner") -> Q
 
     # Step B: Construct RAG Prompt
     prompt = f"""
-You are an expert cybersecurity examiner. Generate 2 multiple-choice questions strictly from the CONTEXT provided below.
+You are an expert cybersecurity examiner. Generate exactly 20 multiple-choice questions strictly from the CONTEXT provided below.
+Ensure the questions are highly diverse and test different parts of the context each time. (Randomization Seed: {uuid.uuid4()})
 
 === CONTEXT ===
 {context}
@@ -105,7 +108,7 @@ You are an expert cybersecurity examiner. Generate 2 multiple-choice questions s
             {"role": "user", "content": prompt}
         ],
         format="json",
-        options={"temperature": 0.2}
+        options={"temperature": 0.8}
     )
 
     parsed = _clean_and_parse_json(response["message"]["content"])

@@ -1,11 +1,14 @@
 import chromadb
+import os
+
+PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "chroma_db")
 
 def get_chroma_collection(collection_name: str = "cybersecurity_modules"):
     """
-    Initializes an in-memory ChromaDB collection and populates it
+    Initializes a persistent ChromaDB collection and populates it
     with sample chapter materials for testing RAG retrieval.
     """
-    client = chromadb.Client()
+    client = chromadb.PersistentClient(path=PERSIST_DIR)
     collection = client.get_or_create_collection(name=collection_name)
 
     # Ingest baseline chapters if collection is empty
