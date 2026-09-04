@@ -4,13 +4,7 @@ from ollama import chat
 from schemas.quiz_schemas import QuizResponse
 from vectorstore.dummy_chroma import get_chroma_collection, retrieve_chapter_context
 
-def _clean_and_parse_json(raw_text: str) -> dict:
-    """Isolates the JSON substring to avoid markdown/preamble parse errors."""
-    start = raw_text.find("{")
-    end = raw_text.rfind("}") + 1
-    if start == -1 or end == 0:
-        raise ValueError("No valid JSON object found in model output.")
-    return json.loads(raw_text[start:end])
+from guardrails.pipeline import apply_input_guardrails, apply_output_guardrails
 
 # ==========================================
 # 1. POST-LOGIN PLACEMENT QUIZ (No RAG)
@@ -20,6 +14,9 @@ def generate_placement_quiz(target_level: str = "beginner") -> QuizResponse:
     Generates a 2-question placement diagnostic to determine 
     if the user routes to the Beginner module or Advanced track.
     """
+    # Apply Input Guardrails
+    apply_input_guardrails(target_level)
+    
     prompt = f"""
 You are an expert cybersecurity examiner evaluating a student's placement level.
 Generate exactly 20 multiple-choice questions for a {target_level.upper()} diagnostic test.
@@ -55,7 +52,8 @@ Ensure the questions are highly diverse and cover different concepts each time. 
         options={"temperature": 0.8}
     )
 
-    parsed = _clean_and_parse_json(response["message"]["content"])
+    # Apply Output Guardrails
+    parsed = apply_output_guardrails(response["message"]["content"])
     return QuizResponse(**parsed)
 
 # ==========================================
@@ -66,14 +64,18 @@ def generate_chapter_quiz(chapter_title: str, difficulty: str = "beginner") -> Q
     Retrieves context from ChromaDB and forces Qwen to generate questions 
     strictly bounded by that context.
     """
-    # Step A: Retrieve context from ChromaDB
+    # Step A: Apply Input Guardrails
+    apply_input_guardrails(chapter_title)
+    apply_input_guardrails(difficulty)
+
+    # Step B: Retrieve context from ChromaDB
     collection = get_chroma_collection()
     context = retrieve_chapter_context(collection, chapter_title)
     
     if not context:
         raise ValueError(f"No context found in ChromaDB for: {chapter_title}")
 
-    # Step B: Construct RAG Prompt
+    # Step C: Construct RAG Prompt
     prompt = f"""
 You are an expert cybersecurity examiner. Generate exactly 20 multiple-choice questions strictly from the CONTEXT provided below.
 Ensure the questions are highly diverse and test different parts of the context each time. (Randomization Seed: {uuid.uuid4()})
@@ -111,5 +113,6 @@ Ensure the questions are highly diverse and test different parts of the context 
         options={"temperature": 0.8}
     )
 
-    parsed = _clean_and_parse_json(response["message"]["content"])
+    # Apply Output Guardrails (with Context for Grounding Check)
+    parsed = apply_output_guardrails(response["message"]["content"], context=context)
     return QuizResponse(**parsed)
